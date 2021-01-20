@@ -64,15 +64,17 @@ func (c *Client) Close() {
 }
 
 // ReadWords Reads words from the PLC data area
-func (c *Client) ReadWords(memoryArea byte, address uint16, readCount uint16) ([]uint16, error) {
+func (c *Client) ReadWords(memoryArea byte, address uint16, readCount uint16) ([]uint16, int) {
 	if checkIsWordMemoryArea(memoryArea) == false {
-		return nil, IncompatibleMemoryAreaError{memoryArea}
+		//return nil, IncompatibleMemoryAreaError{memoryArea}
+		fmt.Println(IncompatibleMemoryAreaError{memoryArea})
+		return nil, 9991
 	}
 	command := readCommand(memAddr(memoryArea, address), readCount)
 	r, e := c.sendCommand(command)
-	e = checkResponse(r, e)
+	code := checkResponse(r, e)
 	if e != nil {
-		return nil, e
+		return nil, code
 	}
 
 	data := make([]uint16, readCount, readCount)
@@ -80,63 +82,67 @@ func (c *Client) ReadWords(memoryArea byte, address uint16, readCount uint16) ([
 		data[i] = c.byteOrder.Uint16(r.data[i*2 : i*2+2])
 	}
 
-	return data, nil
+	return data, 0
 }
 
 // ReadBytes Reads bytes from the PLC data area
-func (c *Client) ReadBytes(memoryArea byte, address uint16, readCount uint16) ([]byte, error) {
+func (c *Client) ReadBytes(memoryArea byte, address uint16, readCount uint16) ([]byte, int) {
 	if checkIsWordMemoryArea(memoryArea) == false {
-		return nil, IncompatibleMemoryAreaError{memoryArea}
+		//return nil, IncompatibleMemoryAreaError{memoryArea}
+		fmt.Println(IncompatibleMemoryAreaError{memoryArea})
+		return nil,  9991
 	}
 	command := readCommand(memAddr(memoryArea, address), readCount)
 	r, e := c.sendCommand(command)
-	e = checkResponse(r, e)
-	if e != nil {
-		return nil, e
+	code := checkResponse(r, e)
+	if code != 0 {
+		return nil, code
 	}
 
-	return r.data, nil
+	return r.data, 0
 }
 
 // ReadString Reads a string from the PLC data area
-func (c *Client) ReadString(memoryArea byte, address uint16, readCount uint16) (string, error) {
-	data, e := c.ReadBytes(memoryArea, address, readCount)
-	if e != nil {
-		return "", e
+func (c *Client) ReadString(memoryArea byte, address uint16, readCount uint16) (string, int) {
+	data, code := c.ReadBytes(memoryArea, address, readCount)
+	if code != 0 {
+		return "", code
 	}
 	n := bytes.IndexByte(data, 0)
 	if n == -1 {
 		n = len(data)
 	}
-	return string(data[:n]), nil
+	return string(data[:n]), 0
 }
 
 // ReadBits Reads bits from the PLC data area
-func (c *Client) ReadBits(memoryArea byte, address uint16, bitOffset byte, readCount uint16) ([]bool, error) {
+func (c *Client) ReadBits(memoryArea byte, address uint16, bitOffset byte, readCount uint16) ([]byte, int) {
 	if checkIsBitMemoryArea(memoryArea) == false {
-		return nil, IncompatibleMemoryAreaError{memoryArea}
+		//return nil, IncompatibleMemoryAreaError{memoryArea}
+		fmt.Println(IncompatibleMemoryAreaError{memoryArea})
+		return nil,  9991
 	}
 	command := readCommand(memAddrWithBitOffset(memoryArea, address, bitOffset), readCount)
 	r, e := c.sendCommand(command)
-	e = checkResponse(r, e)
-	if e != nil {
-		return nil, e
+	code := checkResponse(r, e)
+	if code != 0 {
+		return nil, code
 	}
 
-	data := make([]bool, readCount, readCount)
+	data := make([]byte, readCount, readCount)
 	for i := 0; i < int(readCount); i++ {
-		data[i] = r.data[i]&0x01 > 0
+		data[i] = r.data[i]&0x01
 	}
 
-	return data, nil
+	return data, 0
 }
 
 // ReadClock Reads the PLC clock
-func (c *Client) ReadClock() (*time.Time, error) {
+func (c *Client) ReadClock() (*time.Time, int) {
 	r, e := c.sendCommand(clockReadCommand())
-	e = checkResponse(r, e)
-	if e != nil {
-		return nil, e
+	code := checkResponse(r, e)
+	if code != 0 {
+		return nil, code
 	}
 	year, _ := decodeBCD(r.data[0:1])
 	if year < 50 {
@@ -155,13 +161,15 @@ func (c *Client) ReadClock() (*time.Time, error) {
 		0, // nanosecond
 		time.Local,
 	)
-	return &t, nil
+	return &t, 0
 }
 
 // WriteWords Writes words to the PLC data area
-func (c *Client) WriteWords(memoryArea byte, address uint16, data []uint16) error {
+func (c *Client) WriteWords(memoryArea byte, address uint16, data []uint16) int {
 	if checkIsWordMemoryArea(memoryArea) == false {
-		return IncompatibleMemoryAreaError{memoryArea}
+		//return IncompatibleMemoryAreaError{memoryArea}
+		fmt.Println(IncompatibleMemoryAreaError{memoryArea})
+		return 9991
 	}
 	l := uint16(len(data))
 	bts := make([]byte, 2*l, 2*l)
@@ -174,9 +182,11 @@ func (c *Client) WriteWords(memoryArea byte, address uint16, data []uint16) erro
 }
 
 // WriteString Writes a string to the PLC data area
-func (c *Client) WriteString(memoryArea byte, address uint16, s string) error {
+func (c *Client) WriteString(memoryArea byte, address uint16, s string) int {
 	if checkIsWordMemoryArea(memoryArea) == false {
-		return IncompatibleMemoryAreaError{memoryArea}
+		//return IncompatibleMemoryAreaError{memoryArea}
+		fmt.Println(IncompatibleMemoryAreaError{memoryArea})
+		return 9991
 	}
 	bts := make([]byte, 2*len(s), 2*len(s))
 	copy(bts, s)
@@ -187,63 +197,66 @@ func (c *Client) WriteString(memoryArea byte, address uint16, s string) error {
 }
 
 // WriteBytes Writes bytes array to the PLC data area
-func (c *Client) WriteBytes(memoryArea byte, address uint16, b []byte) error {
+func (c *Client) WriteBytes(memoryArea byte, address uint16, b []byte) int {
 	if checkIsWordMemoryArea(memoryArea) == false {
-		return IncompatibleMemoryAreaError{memoryArea}
+		//return IncompatibleMemoryAreaError{memoryArea}
+		fmt.Println(IncompatibleMemoryAreaError{memoryArea})
+		return 9991
 	}
 	command := writeCommand(memAddr(memoryArea, address), uint16(len(b)), b)
 	return checkResponse(c.sendCommand(command))
 }
 
 // WriteBits Writes bits to the PLC data area
-func (c *Client) WriteBits(memoryArea byte, address uint16, bitOffset byte, data []bool) error {
+func (c *Client) WriteBits(memoryArea byte, address uint16, bitOffset byte, data []byte) int {
 	if checkIsBitMemoryArea(memoryArea) == false {
-		return IncompatibleMemoryAreaError{memoryArea}
+		return int(memoryArea)
 	}
 	l := uint16(len(data))
-	bts := make([]byte, 0, l)
-	var d byte
-	for i := 0; i < int(l); i++ {
-		if data[i] {
-			d = 0x01
-		} else {
-			d = 0x00
-		}
-		bts = append(bts, d)
-	}
-	command := writeCommand(memAddrWithBitOffset(memoryArea, address, bitOffset), l, bts)
-
+	//bts := make([]byte, 0, l)
+	//var d byte
+	//for i := 0; i < int(l); i++ {
+	//	if data[i] {
+	//		d = 0x01
+	//	} else {
+	//		d = 0x00
+	//	}
+	//	bts = append(bts, d)
+	//}
+	command := writeCommand(memAddrWithBitOffset(memoryArea, address, bitOffset), l, data)
 	return checkResponse(c.sendCommand(command))
 }
 
 // SetBit Sets a bit in the PLC data area
-func (c *Client) SetBit(memoryArea byte, address uint16, bitOffset byte) error {
+func (c *Client) SetBit(memoryArea byte, address uint16, bitOffset byte) int {
 	return c.bitTwiddle(memoryArea, address, bitOffset, 0x01)
 }
 
 // ResetBit Resets a bit in the PLC data area
-func (c *Client) ResetBit(memoryArea byte, address uint16, bitOffset byte) error {
+func (c *Client) ResetBit(memoryArea byte, address uint16, bitOffset byte) int {
 	return c.bitTwiddle(memoryArea, address, bitOffset, 0x00)
 }
 
 // ToggleBit Toggles a bit in the PLC data area
-func (c *Client) ToggleBit(memoryArea byte, address uint16, bitOffset byte) error {
+func (c *Client) ToggleBit(memoryArea byte, address uint16, bitOffset byte) int {
 	b, e := c.ReadBits(memoryArea, address, bitOffset, 1)
-	if e != nil {
+	if e != 0 {
 		return e
 	}
-	var t byte
-	if b[0] {
-		t = 0x00
-	} else {
-		t = 0x01
-	}
-	return c.bitTwiddle(memoryArea, address, bitOffset, t)
+	//var t byte
+	//if b[0] == 0x00{
+	//	t = 0x00
+	//} else {
+	//	t = 0x01
+	//}
+	return c.bitTwiddle(memoryArea, address, bitOffset, b[0])
 }
 
-func (c *Client) bitTwiddle(memoryArea byte, address uint16, bitOffset byte, value byte) error {
+func (c *Client) bitTwiddle(memoryArea byte, address uint16, bitOffset byte, value byte) int {
 	if checkIsBitMemoryArea(memoryArea) == false {
-		return IncompatibleMemoryAreaError{memoryArea}
+		//return IncompatibleMemoryAreaError{memoryArea}
+		fmt.Println(IncompatibleMemoryAreaError{memoryArea})
+		return 9991
 	}
 	mem := memoryAddress{memoryArea, address, bitOffset}
 	command := writeCommand(mem, 1, []byte{value})
@@ -251,14 +264,15 @@ func (c *Client) bitTwiddle(memoryArea byte, address uint16, bitOffset byte, val
 	return checkResponse(c.sendCommand(command))
 }
 
-func checkResponse(r *response, e error) error {
+func checkResponse(r *response, e error) int {
 	if e != nil {
-		return e
+		return 999
 	}
 	if r.endCode != EndCodeNormalCompletion {
-		return fmt.Errorf("error reported by destination, end code 0x%x", r.endCode)
+		//return fmt.Errorf("error reported by destination, end code 0x%x", r.endCode)
+		return int(r.endCode)
 	}
-	return nil
+	return 0
 }
 
 func (c *Client) nextHeader() *Header {
