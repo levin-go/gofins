@@ -64,25 +64,30 @@ func (c *Client) Close() {
 }
 
 // ReadWords Reads words from the PLC data area
-func (c *Client) ReadWords(memoryArea byte, address uint16, readCount uint16) ([]uint16, int) {
+func (c *Client) ReadWords(memoryArea byte, address uint16, readCount uint16) ([]byte, int) {
 	if checkIsWordMemoryArea(memoryArea) == false {
 		//return nil, IncompatibleMemoryAreaError{memoryArea}
 		fmt.Println(IncompatibleMemoryAreaError{memoryArea})
 		return nil, 9991
 	}
 	command := readCommand(memAddr(memoryArea, address), readCount)
+	//fmt.Printf("send command:")
+	//for _, v := range command{
+	//	fmt.Printf("%02x ", v)
+	//}
+	//fmt.Println()
 	r, e := c.sendCommand(command)
 	code := checkResponse(r, e)
-	if e != nil {
+	if code != 0 {
 		return nil, code
 	}
 
-	data := make([]uint16, readCount, readCount)
-	for i := 0; i < int(readCount); i++ {
-		data[i] = c.byteOrder.Uint16(r.data[i*2 : i*2+2])
-	}
+	//data := make([]uint16, readCount, readCount)
+	//for i := 0; i < int(readCount); i++ {
+	//	data[i] = c.byteOrder.Uint16(r.data[i*2 : i*2+2])
+	//}
 
-	return data, 0
+	return r.data, 0
 }
 
 // ReadBytes Reads bytes from the PLC data area
@@ -203,7 +208,7 @@ func (c *Client) WriteBytes(memoryArea byte, address uint16, b []byte) int {
 		fmt.Println(IncompatibleMemoryAreaError{memoryArea})
 		return 9991
 	}
-	command := writeCommand(memAddr(memoryArea, address), uint16(len(b)), b)
+	command := writeCommand(memAddr(memoryArea, address), uint16(len(b)/2), b)
 	return checkResponse(c.sendCommand(command))
 }
 
@@ -266,6 +271,7 @@ func (c *Client) bitTwiddle(memoryArea byte, address uint16, bitOffset byte, val
 
 func checkResponse(r *response, e error) int {
 	if e != nil {
+		fmt.Println(e)
 		return 999
 	}
 	if r.endCode != EndCodeNormalCompletion {
@@ -326,6 +332,11 @@ func (c *Client) listenLoop() {
 		}
 
 		if n > 0 {
+			//fmt.Println("response:")
+			//for _,v := range buf[:n]{
+			//	fmt.Printf("%02x ", v)
+			//}
+			//fmt.Println()
 			ans := decodeResponse(buf[:n])
 			c.resp[ans.header.serviceID] <- ans
 		} else {
@@ -338,7 +349,8 @@ func checkIsWordMemoryArea(memoryArea byte) bool {
 	if memoryArea == MemoryAreaDMWord ||
 		memoryArea == MemoryAreaARWord ||
 		memoryArea == MemoryAreaHRWord ||
-		memoryArea == MemoryAreaWRWord {
+		memoryArea == MemoryAreaWRWord ||
+		memoryArea == MemoryAreaCIOWord{
 		return true
 	}
 	return false
@@ -348,7 +360,8 @@ func checkIsBitMemoryArea(memoryArea byte) bool {
 	if memoryArea == MemoryAreaDMBit ||
 		memoryArea == MemoryAreaARBit ||
 		memoryArea == MemoryAreaHRBit ||
-		memoryArea == MemoryAreaWRBit {
+		memoryArea == MemoryAreaWRBit ||
+		memoryArea == MemoryAreaTaskBit{
 		return true
 	}
 	return false
